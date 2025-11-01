@@ -5,26 +5,33 @@ This guide explains how to deploy the forecasting service to Render.
 ## Prerequisites
 
 1. A Render account (sign up at [render.com](https://render.com))
-2. Your forecasting repository connected to GitHub
+2. Your forecasting repository connected to GitHub: `https://github.com/glycelyvon/forecasting.git`
 
 ## Deployment Options
 
 ### Option 1: Using Render Dashboard (Recommended)
 
+**If deploying from the separate `forecasting` repository** (recommended):
+
 1. **Connect Repository**
    - Go to [Render Dashboard](https://dashboard.render.com)
    - Click "New +" → "Web Service"
    - Connect your GitHub account if not already connected
-   - Select the `forecasting` repository (or the repository containing the forecasting folder)
+   - Select the `forecasting` repository (`glycelyvon/forecasting`)
 
 2. **Configure Service**
    - **Name**: `forecasting-service` (or your preferred name)
    - **Region**: Choose closest to your users
    - **Branch**: `main`
-   - **Root Directory**: Leave empty if deploying from the root, or set to `forecasting` if the repo is the parent folder
+   - **Root Directory**: **Leave empty** (since the repo only contains the forecasting code)
    - **Runtime**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
+
+**If deploying from the main FCM repository** (alternative):
+
+- **Root Directory**: Set to `forecasting` 
+- All other settings remain the same
 
 3. **Environment Variables**
    Add the following environment variables in Render dashboard:
