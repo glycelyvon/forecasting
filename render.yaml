@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: forecasting-service
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: FORECASTING_PORT
+        sync: false
+      - key: FLASK_DEBUG
+        value: False
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+
