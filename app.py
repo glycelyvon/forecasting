@@ -40,14 +40,21 @@ def handle_preflight():
 
 # Database connection
 def get_db_connection():
-    """Get database connection using environment variables"""
+    """Get database connection using DATABASE_URL (preferred) or individual config"""
     try:
+        # Try DATABASE_URL first (recommended for Supabase)
+        database_url = os.getenv('DATABASE_URL')
+        if database_url:
+            conn = psycopg2.connect(database_url)
+            return conn
+        
+        # Fallback to individual config
         conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
+            host=os.getenv('DB_HOST', 'aws-1-ap-southeast-1.pooler.supabase.com'),
             port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'fcmDatabase'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASS', '')
+            database=os.getenv('DB_NAME', 'postgres'),
+            user=os.getenv('DB_USER', 'postgres.nacwxaebqxiihwgowaok'),
+            password=os.getenv('DB_PASS', 'XmwcJTZ2QF0qSn6M')
         )
         return conn
     except Exception as e:
