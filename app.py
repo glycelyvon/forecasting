@@ -1,5 +1,8 @@
-from flask import Flask, request, jsonify, make_response, g
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
+from flask_caching import Cache
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import pandas as pd
 import numpy as np
 import joblib
@@ -8,8 +11,6 @@ import os
 from datetime import datetime, timedelta
 import psycopg2
 from dotenv import load_dotenv
-from flask_caching import Cache
-from flask_compress import Compress
 
 # Load environment variables
 load_dotenv()
@@ -18,30 +19,22 @@ app = Flask(__name__)
 CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
      allow_headers=['Content-Type', 'Authorization', 'Access-Control-Allow-Origin'])
 
-# Compression for faster responses on larger JSON payloads
-Compress(app)
+# Simple cache setup; switch to Redis by setting CACHE_TYPE and connection URL via env
+cache = Cache(app, config={
+    'CACHE_TYPE': os.getenv('CACHE_TYPE', 'SimpleCache'),
+    'CACHE_DEFAULT_TIMEOUT': int(os.getenv('CACHE_DEFAULT_TIMEOUT', '600'))
+})
 
-# Caching (Redis if REDIS_URL is provided, otherwise in-memory SimpleCache)
-cache_config = {}
-redis_url = os.getenv('REDIS_URL')
-if redis_url:
-    cache_config = {
-        'CACHE_TYPE': 'RedisCache',
-        'CACHE_REDIS_URL': redis_url,
-        'CACHE_DEFAULT_TIMEOUT': 600,
-    }
-else:
-    cache_config = {
-        'CACHE_TYPE': 'SimpleCache',
-        'CACHE_DEFAULT_TIMEOUT': 600,
-    }
-cache = Cache(app, config=cache_config)
+# Rate limiting (configurable via env)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[
+        os.getenv('RATE_LIMIT_DEFAULT', '120 per minute')
+    ],
+)
 
-# Add CORS headers and response-time metrics to all responses
-@app.before_request
-def start_timer():
-    g._req_start = datetime.now()
-
+# Add CORS headers to all responses
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -49,12 +42,6 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,HEAD')
     response.headers.add('Access-Control-Allow-Credentials', 'true')
     response.headers.add('Access-Control-Max-Age', '86400')
-    try:
-        if hasattr(g, '_req_start'):
-            delta = datetime.now() - g._req_start
-            response.headers['X-Response-Time-ms'] = str(int(delta.total_seconds() * 1000))
-    except Exception:
-        pass
     return response
 
 # Handle preflight OPTIONS requests
@@ -171,7 +158,8 @@ def forecast_peak():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/daily_forecast', methods=['GET'])
-@cache.cached(timeout=600, key_prefix='daily_forecast_v1')
+@limiter.limit(os.getenv('RATE_LIMIT_FORECAST', '30 per minute'))
+@cache.cached(timeout=600)
 def daily_forecast():
     """Get weekly passenger forecast (Sunday to Saturday) using Prophet model"""
     try:
@@ -225,7 +213,8 @@ def daily_forecast():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/hourly_forecast', methods=['GET'])
-@cache.cached(timeout=300, key_prefix='hourly_forecast_v1')
+@limiter.limit(os.getenv('RATE_LIMIT_FORECAST', '30 per minute'))
+@cache.cached(timeout=600)
 def hourly_forecast():
     """Get hourly passenger forecast for operational hours (4:00 AM to 8:00 PM) using XGBoost model"""
     try:
@@ -285,7 +274,8 @@ def hourly_forecast():
 
 
 @app.route('/yearly_daily', methods=['GET'])
-@cache.cached(timeout=3600, query_string=True)
+@limiter.limit(os.getenv('RATE_LIMIT_FORECAST', '30 per minute'))
+@cache.cached(timeout=600, query_string=True)
 def yearly_daily_forecast():
     """Get a yearly daily passenger forecast grid for a given year.
 
@@ -409,7 +399,6 @@ def forecast_timeseries():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/forecast/historical', methods=['GET'])
-@cache.cached(timeout=600)
 def get_historical_data():
     """Get historical data for forecasting"""
     try:
